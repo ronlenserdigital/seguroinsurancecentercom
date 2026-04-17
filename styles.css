@@ -507,6 +507,7 @@ input, select, textarea, button {
   display: flex;
   flex-direction: column;
   line-height: 1;
+  gap: 3px;
 }
 
 .logo-text {
