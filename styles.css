@@ -470,7 +470,7 @@ input, select, textarea, button {
 .nav-inner {
   max-width: var(--container);
   margin: 0 auto;
-  padding: 18px 28px;
+  padding: 12px 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -508,10 +508,6 @@ input, select, textarea, button {
   flex-direction: column;
   line-height: 1;
   gap: 3px;
-}
-
-.logo-text {
-  display: none;
 }
 
 .logo-primary {
