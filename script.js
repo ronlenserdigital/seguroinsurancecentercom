@@ -175,25 +175,22 @@ const WEB3FORMS_ACCESS_KEY = '8d3f79bb-68c3-428b-966e-adf925560724';
   async function submitToWeb3Forms(form, formLabel) {
     const formData = new FormData(form);
 
-    // Inject Web3Forms-required fields
     formData.append('access_key', WEB3FORMS_ACCESS_KEY);
     formData.append('subject', `New ${formLabel} — Seguro Insurance Center`);
     formData.append('from_name', 'Seguro Insurance Website');
 
-    // Honeypot spam trap (Web3Forms reads this field)
-    if (!formData.has('botcheck')) formData.append('botcheck', '');
-
-    // Friendly formatted message for the email body
-    const entries = {};
-    formData.forEach((value, key) => {
-      if (!['access_key', 'subject', 'from_name', 'botcheck'].includes(key) && value) {
-        entries[key] = value;
+    // Build clean readable message — plain text, one field per line
+    const skip = ['access_key', 'subject', 'from_name', 'botcheck', 'message'];
+    const lines = [];
+    for (const [key, value] of formData.entries()) {
+      if (!skip.includes(key) && value && value.toString().trim()) {
+        const label = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
+        lines.push(`${label}: ${value}`);
       }
-    });
-    const prettyMessage = Object.entries(entries)
-      .map(([k, v]) => `${k.charAt(0).toUpperCase() + k.slice(1)}: ${v}`)
-      .join('\n');
-    formData.append('message', prettyMessage);
+    }
+    // Use set not append — ensures only one message field
+    formData.delete('message');
+    formData.append('message', lines.join('\r\n'));
 
     const response = await fetch('https://api.web3forms.com/submit', {
       method: 'POST',
@@ -202,67 +199,81 @@ const WEB3FORMS_ACCESS_KEY = '8d3f79bb-68c3-428b-966e-adf925560724';
     return response.json();
   }
 
+  function showSuccessState(form, lang, successMessage) {
+    // Hide all form content and show a success panel
+    const existing = form.querySelector('.form-success-state');
+    if (existing) existing.remove();
+
+    const panel = document.createElement('div');
+    panel.className = 'form-success-state';
+    panel.innerHTML = `
+      <div class="form-success-icon">✓</div>
+      <div class="form-success-title">${lang === 'es' ? '¡Enviado!' : 'Sent!'}</div>
+      <div class="form-success-msg">${successMessage[lang]}</div>
+      <button type="button" class="btn btn-primary form-success-btn" style="margin-top:18px;">
+        ${lang === 'es' ? 'Enviar Otro' : 'Submit Another'}
+      </button>
+    `;
+
+    // Hide form contents
+    Array.from(form.children).forEach(el => el.style.display = 'none');
+    form.appendChild(panel);
+
+    // Reset + restore on "Submit Another"
+    panel.querySelector('.form-success-btn').addEventListener('click', () => {
+      form.reset();
+      if (form.querySelector('.form-step')) goToStep(form, 1);
+      Array.from(form.children).forEach(el => el.style.display = '');
+      panel.remove();
+    });
+  }
+
   function handleFormSubmit(form, formLabel, successMessage) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-
       const lang = html.getAttribute('data-lang') || 'en';
+      const isSkip = e.submitter && e.submitter.classList.contains('btn-link');
 
-      // Validate required fields across all steps
-      const requiredFields = form.querySelectorAll('[required]');
-      let firstInvalid = null;
-      for (const field of requiredFields) {
-        if (!field.value.trim()) {
-          firstInvalid = field;
-          break;
+      // Validate required fields unless skipping
+      if (!isSkip) {
+        const requiredFields = form.querySelectorAll('[required]');
+        let firstInvalid = null;
+        for (const field of requiredFields) {
+          if (!field.value.trim()) { firstInvalid = field; break; }
+        }
+        if (firstInvalid) {
+          const parentStep = firstInvalid.closest('.form-step');
+          if (parentStep) goToStep(form, parseInt(parentStep.dataset.step, 10));
+          firstInvalid.focus();
+          firstInvalid.style.borderColor = '#ff6b6b';
+          setTimeout(() => (firstInvalid.style.borderColor = ''), 2500);
+          return;
         }
       }
 
-      if (firstInvalid) {
-        const parentStep = firstInvalid.closest('.form-step');
-        if (parentStep) {
-          const stepNum = parseInt(parentStep.dataset.step, 10);
-          goToStep(form, stepNum);
-        }
-        firstInvalid.focus();
-        firstInvalid.style.borderColor = '#ff6b6b';
-        setTimeout(() => (firstInvalid.style.borderColor = ''), 2500);
-        return;
-      }
+      // Find the submit button — handle both step-3 submit and skip btn
+      const btn = e.submitter ||
+        form.querySelector('.form-step.active button[type="submit"]') ||
+        form.querySelector('button[type="submit"]');
 
-      const btn = e.submitter || form.querySelector('button[type="submit"]:not([data-next]):not([data-prev])');
       const originalHTML = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = `<span>${lang === 'es' ? 'Enviando…' : 'Sending…'}</span>`;
 
       try {
-        // Bail gracefully if the key hasn't been set yet (dev-mode fallback)
-        if (!WEB3FORMS_ACCESS_KEY) {
-          // Simulated success so the UI still demos correctly pre-deployment.
-          await new Promise((r) => setTimeout(r, 700));
-          btn.innerHTML = `<span>✓ ${successMessage[lang]}</span>`;
-          form.reset();
-          if (form.querySelector('.form-step')) goToStep(form, 1);
-          console.warn('[Web3Forms] No access key configured — form submission simulated. Paste your key into WEB3FORMS_ACCESS_KEY in script.js to enable live email delivery.');
+        const result = await submitToWeb3Forms(form, formLabel);
+        if (result.success) {
+          btn.disabled = false;
+          btn.innerHTML = originalHTML;
+          showSuccessState(form, lang, successMessage);
         } else {
-          const result = await submitToWeb3Forms(form, formLabel);
-          if (result.success) {
-            btn.innerHTML = `<span>✓ ${successMessage[lang]}</span>`;
-            form.reset();
-            if (form.querySelector('.form-step')) goToStep(form, 1);
-          } else {
-            throw new Error(result.message || 'Submission failed');
-          }
+          throw new Error(result.message || 'Submission failed');
         }
       } catch (err) {
-        console.error('Form submission error:', err);
+        console.error('Form error:', err);
         btn.innerHTML = `<span>⚠ ${lang === 'es' ? 'Error — llama directamente' : 'Error — please call us'}</span>`;
+        setTimeout(() => { btn.disabled = false; btn.innerHTML = originalHTML; }, 3400);
       }
-
-      setTimeout(() => {
-        btn.disabled = false;
-        btn.innerHTML = originalHTML;
-      }, 3400);
     });
   }
 
