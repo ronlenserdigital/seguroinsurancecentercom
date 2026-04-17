@@ -13,7 +13,7 @@
       That's it — both forms (Quick Quote + Contact)
       will submit straight to the client's inbox.
 --------------------------------------------- */
-const WEB3FORMS_ACCESS_KEY = 'PASTE-YOUR-ACCESS-KEY-HERE';
+const WEB3FORMS_ACCESS_KEY = '8d3f79bb-68c3-428b-966e-adf925560724';
 /* --------------------------------------------- */
 
 
@@ -237,7 +237,7 @@ const WEB3FORMS_ACCESS_KEY = 'PASTE-YOUR-ACCESS-KEY-HERE';
 
       try {
         // Bail gracefully if the key hasn't been set yet (dev-mode fallback)
-        if (!WEB3FORMS_ACCESS_KEY || WEB3FORMS_ACCESS_KEY === 'PASTE-YOUR-ACCESS-KEY-HERE') {
+        if (!WEB3FORMS_ACCESS_KEY) {
           // Simulated success so the UI still demos correctly pre-deployment.
           await new Promise((r) => setTimeout(r, 700));
           btn.innerHTML = `<span>✓ ${successMessage[lang]}</span>`;
